@@ -19,12 +19,16 @@ fn main() {
                 println!("Request: {}", String::from_utf8_lossy(&buffer[..bytes_read]));
                 let request = String::from_utf8_lossy(&buffer[..bytes_read]);
                 let path = request.split_whitespace().nth(1).unwrap();
-                let response = match path {
-                    "/" => "HTTP/1.1 200 OK\r\n\r\n",
-                    "/echo" => "HTTP/1.1 200 OK\r\n\r\n",
-                    _ => "HTTP/1.1 404 Not Found\r\n\r\n",
+
+                let response = if path == "/" {
+                    "HTTP/1.1 200 OK\r\n\r\n".to_string()
+                } else if path.starts_with("/echo/") {
+                    let str = path.split("/").nth(2).unwrap();
+                    let strlen = str.len();
+                    format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", strlen, str).to_string()
+                } else {
+                    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
                 };
-                println!("Path: {}", path);
 
                 stream.write_all(response.as_bytes()).unwrap();
             }
