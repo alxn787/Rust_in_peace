@@ -116,7 +116,7 @@ fn dispatch(req: &HttpRequest, files_root: &str) -> String {
 
     match req.path.as_str() {
         "/" => "HTTP/1.1 200 OK\r\n\r\n".to_string(),
-        p if p.starts_with("/echo/") => text_ok(&p["/echo/".len()..]),
+        p if p.starts_with("/echo/") => echo_response(req, &p["/echo/".len()..]),
         "/user-agent" => text_ok(header_value(&req.headers, "User-Agent").unwrap_or("")),
         p if p.starts_with("/files/") => serve_file(files_root, &p["/files/".len()..]),
         _ => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
@@ -163,6 +163,18 @@ fn text_ok(body: &str) -> String {
     )
 }
 
+fn echo_response(req: &HttpRequest, body: &str) -> String {
+    if accepts_gzip(&req.headers) {
+        return format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+    }
+
+    text_ok(body)
+}
+
 fn path_under_root(root: &str, filename: &str) -> String {
     format!("{}/{}", root.trim_end_matches('/'), filename)
 }
@@ -182,7 +194,9 @@ fn parse_request_line(headers: &str) -> (String, String) {
 fn header_value<'a>(headers: &'a str, name: &str) -> Option<&'a str> {
     for line in headers.lines() {
         let line = line.trim_end_matches('\r');
-        let (left, value) = line.split_once(':')?;
+        let Some((left, value)) = line.split_once(':') else {
+            continue;
+        };
 
         if left.trim().eq_ignore_ascii_case(name) {
             return Some(value.trim());
@@ -190,4 +204,10 @@ fn header_value<'a>(headers: &'a str, name: &str) -> Option<&'a str> {
     }
 
     None
+}
+
+fn accepts_gzip(headers: &str) -> bool {
+    header_value(headers, "Accept-Encoding")
+        .map(|value| value.split(',').any(|encoding| encoding.trim() == "gzip"))
+        .unwrap_or(false)
 }
