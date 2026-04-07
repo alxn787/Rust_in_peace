@@ -63,7 +63,9 @@ impl HttpRequest {
         };
 
         let headers = String::from_utf8_lossy(&buf[..header_end]).to_string();
-        let body_len = header_value_usize(&headers, "Content-Length").unwrap_or(0);
+        let body_len = header_value(&headers, "Content-Length")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
         let body_start = header_end + 4;
 
         while buf.len() < body_start + body_len {
@@ -115,7 +117,7 @@ fn dispatch(req: &HttpRequest, files_root: &str) -> String {
     match req.path.as_str() {
         "/" => "HTTP/1.1 200 OK\r\n\r\n".to_string(),
         p if p.starts_with("/echo/") => text_ok(&p["/echo/".len()..]),
-        "/user-agent" => text_ok(&user_agent(&req.headers)),
+        "/user-agent" => text_ok(header_value(&req.headers, "User-Agent").unwrap_or("")),
         p if p.starts_with("/files/") => serve_file(files_root, &p["/files/".len()..]),
         _ => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
     }
@@ -177,25 +179,15 @@ fn parse_request_line(headers: &str) -> (String, String) {
     (method, path)
 }
 
-/// Returns the value for a header, compared case-insensitively (e.g. `User-Agent`).
 fn header_value<'a>(headers: &'a str, name: &str) -> Option<&'a str> {
-    headers.lines().find_map(|line| header_line_value(line, name))
-}
+    for line in headers.lines() {
+        let line = line.trim_end_matches('\r');
+        let (left, value) = line.split_once(':')?;
 
-fn header_line_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
-    let line = line.trim_end_matches('\r');
-    let (left, value) = line.split_once(':')?;
-    if left.trim().eq_ignore_ascii_case(name) {
-        Some(value.trim())
-    } else {
-        None
+        if left.trim().eq_ignore_ascii_case(name) {
+            return Some(value.trim());
+        }
     }
-}
 
-fn header_value_usize(headers: &str, name: &str) -> Option<usize> {
-    header_value(headers, name)?.parse().ok()
-}
-
-fn user_agent(headers: &str) -> String {
-    header_value(headers, "User-Agent").unwrap_or("").to_string()
+    None
 }
