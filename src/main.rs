@@ -10,8 +10,6 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     
-    let directory_index = args.iter().position(|arg| arg == "--directory"); 
-    
     // let directory = if let Some(directory_index) = directory_index {
     //     args[directory_index + 1].clone()
     // } else {
@@ -94,6 +92,5 @@ fn handle_connection(mut stream: TcpStream, directory: String) {
                             }
                             _ => "HTTP/1.1 404 Not Found\r\n\r\n".to_string(),
                         };
-
     stream.write_all(response.as_bytes()).unwrap();
 }
